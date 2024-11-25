@@ -1,33 +1,32 @@
-import requests
+import subprocess
 
-def test_sqli(url, param, payload_file):
+def test_sqli_with_sqlmap(url):
     try:
-        # Open the payload file and read each line
-        with open(payload_file, 'r') as file:
-            payloads = file.readlines()
+        # Ensure sqlmap is installed on your system (either in PATH or specify the path)
+        sqlmap_path = "sqlmap"  # Change to full path if sqlmap is not in the system PATH
+
+        # Call sqlmap with the constructed URL
+        print(f"Testing {url} with sqlmap...")
+        result = subprocess.run([sqlmap_path, "-u", url, "--batch", "--level=3", "--risk=3", "--technique=BEUSTQ"],
+                                capture_output=True, text=True, timeout=60)
+
+        # Enhance detection logic by checking for common SQLMap vulnerability output keywords
+        result_output = result.stdout.lower()
+
+        # Check for potential vulnerabilities by looking for specific keywords in the output
+        if any(keyword in result_output for keyword in ["vulnerable", "available", "backdoor", "sqlmap has identified"]):
+            print(f"Potential vulnerability detected at {url}")
+        elif any(keyword in result_output for keyword in ["error", "unable", "connection failed", "timeout"]):
+            print(f"sqlmap error occurred while testing {url}")
+        else:
+            print(f"sqlmap test completed for {url}")
         
-        for payload in payloads:
-            # Strip any leading/trailing whitespace from the payload
-            payload = payload.strip()
-            
-            # Construct the URL with the payload
-            test_url = f"{url}?{param}={payload}"
-            
-            # Send the request
-            response = requests.get(test_url)
-            
-            # Check if the response indicates a potential SQLi vulnerability
-            if "error" not in response.text.lower() and "syntax" not in response.text.lower():
-                print(f"Potential SQL Injection vulnerability found at {test_url}")
-            else:
-                print(f"No vulnerability found at {test_url}")
-    
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-    except FileNotFoundError:
-        print(f"Payload file '{payload_file}' not found.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during sqlmap execution: {e}")
+    except subprocess.TimeoutExpired:
+        print(f"sqlmap execution timed out while testing {url}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-
-test_sqli('http://example.com/page', 'param', 'payloads.txt')
+# Usage example
+test_sqli_with_sqlmap('http://example.com/page?param=value')
